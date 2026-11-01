@@ -1,0 +1,37 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: multitenant_crm
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d multitenant_crm"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build: .
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_NAME: multitenant_crm
+      DB_MIGRATOR_USER: ${DB_MIGRATOR_USER:-app_migrator}
+      DB_MIGRATOR_PASSWORD: ${DB_MIGRATOR_PASSWORD:-app_migrator}
+      DB_RUNTIME_USER: ${DB_RUNTIME_USER:-app_runtime}
+      DB_RUNTIME_PASSWORD: ${DB_RUNTIME_PASSWORD:-app_runtime}
+      JWT_SECRET: ${JWT_SECRET:-change-me-dev-only-change-me-dev-only}
+    ports:
+      - "8080:8080"
+
+volumes:
+  pg_data:

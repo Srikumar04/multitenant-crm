@@ -1,0 +1,42 @@
+spring:
+  application:
+    name: multitenant-crm
+
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:multitenant_crm}
+    username: ${DB_RUNTIME_USER:app_runtime}
+    password: ${DB_RUNTIME_PASSWORD:app_runtime}
+    hikari:
+      maximum-pool-size: 10
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: false
+
+  liquibase:
+    enabled: true
+    change-log: classpath:db/changelog/db.changelog-master.yaml
+    user: ${DB_MIGRATOR_USER:app_migrator}
+    password: ${DB_MIGRATOR_PASSWORD:app_migrator}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: when-authorized
+
+app:
+  jwt:
+    secret: ${JWT_SECRET:change-me-dev-only-change-me-dev-only}
+    expiration-minutes: 60
+
+logging:
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [tenant=%X{tenantId:-none}] %logger{36} - %msg%n"

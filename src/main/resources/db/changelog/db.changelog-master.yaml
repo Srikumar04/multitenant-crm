@@ -1,0 +1,10 @@
+databaseChangeLog:
+  # Phase 1 adds the real changesets: tenants, users, contacts, tickets,
+  # ticket_comments, audit_log, DB roles, and RLS policies.
+  - changeSet:
+      id: 0-placeholder
+      author: sri
+      changes:
+        - sql:
+            comment: Placeholder changeset so Liquibase runs cleanly before Phase 1 adds real tables.
+            sql: SELECT 1;

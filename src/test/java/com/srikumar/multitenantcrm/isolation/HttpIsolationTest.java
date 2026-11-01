@@ -1,9 +1,7 @@
 package com.srikumar.multitenantcrm.isolation;
 
-import com.srikumar.multitenantcrm.auth.LoginResponse;
 import com.srikumar.multitenantcrm.contact.Contact;
 import com.srikumar.multitenantcrm.contact.ContactRepository;
-import com.srikumar.multitenantcrm.tenant.TenantOnboardingResponse;
 import com.srikumar.multitenantcrm.testsupport.AbstractHttpIsolationTest;
 import java.util.List;
 import java.util.Map;
@@ -72,44 +70,11 @@ class HttpIsolationTest extends AbstractHttpIsolationTest {
         HttpHeaders headers = new HttpHeaders();
         headers.setBearerAuth(token);
 
-        ResponseEntity<List> response = restTemplate.exchange(
-                url("/api/contacts"), HttpMethod.GET, new HttpEntity<>(headers), List.class);
+        ResponseEntity<Map> response = restTemplate.exchange(
+                url("/api/contacts"), HttpMethod.GET, new HttpEntity<>(headers), Map.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-        return (List<Map<String, Object>>) response.getBody();
-    }
-
-    private UUID onboardTenant(String name, String adminEmail, String adminPassword) {
-        HttpHeaders headers = new HttpHeaders();
-        headers.setBasicAuth("platform-admin", "change-me-dev-only");
-
-        Map<String, Object> request = Map.of(
-                "name", name,
-                "plan", "free",
-                "adminEmail", adminEmail,
-                "adminPassword", adminPassword);
-
-        ResponseEntity<TenantOnboardingResponse> response = restTemplate.exchange(
-                url("/api/tenants"),
-                HttpMethod.POST,
-                new HttpEntity<>(request, headers),
-                TenantOnboardingResponse.class);
-
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
-        return response.getBody().tenantId();
-    }
-
-    private String login(UUID tenantId, String email, String password) {
-        Map<String, Object> request = Map.of(
-                "tenantId", tenantId.toString(),
-                "email", email,
-                "password", password);
-
-        ResponseEntity<LoginResponse> response = restTemplate.postForEntity(
-                url("/api/auth/login"), request, LoginResponse.class);
-
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-        return response.getBody().token();
+        return (List<Map<String, Object>>) response.getBody().get("content");
     }
 
     private Contact contact(UUID tenantId, String name) {

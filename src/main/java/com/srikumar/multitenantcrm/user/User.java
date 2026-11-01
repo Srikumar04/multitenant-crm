@@ -6,6 +6,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.UUID;
+import org.hibernate.annotations.CreationTimestamp;
 
 @Entity
 @Table(name = "users")
@@ -26,7 +27,8 @@ public class User {
     @Column(nullable = false)
     private String role;
 
-    @Column(name = "created_at", insertable = false, updatable = false)
+    @CreationTimestamp
+    @Column(name = "created_at", updatable = false)
     private Instant createdAt;
 
     public UUID getId() {

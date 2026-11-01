@@ -1,5 +1,6 @@
 package com.srikumar.multitenantcrm.auth;
 
+import com.srikumar.multitenantcrm.tenancy.CurrentUserContext;
 import com.srikumar.multitenantcrm.tenancy.TenantContext;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtException;
@@ -43,6 +44,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             filterChain.doFilter(request, response);
         } finally {
             TenantContext.clear();
+            CurrentUserContext.clear();
         }
     }
 
@@ -50,9 +52,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         try {
             Claims claims = jwtService.parse(token).getPayload();
             UUID tenantId = UUID.fromString(claims.get("tenant_id", String.class));
+            UUID userId = UUID.fromString(claims.get("user_id", String.class));
             String role = claims.get("role", String.class);
 
             TenantContext.setTenantId(tenantId);
+            CurrentUserContext.setUserId(userId);
             var authorities = List.of(new SimpleGrantedAuthority("ROLE_" + role));
             var authentication =
                     new UsernamePasswordAuthenticationToken(claims.getSubject(), null, authorities);
@@ -60,6 +64,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         } catch (JwtException | IllegalArgumentException ex) {
             SecurityContextHolder.clearContext();
             TenantContext.clear();
+            CurrentUserContext.clear();
         }
     }
 }

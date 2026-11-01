@@ -58,3 +58,20 @@ added as it's implemented or revisited.
   resting on an implicit, method-signature-dependent default that silently fails closed (as zero
   rows, not an error) if it doesn't fire - the worst kind of bug for a system whose entire job is
   tenant isolation.
+
+## 0005 - Security error responses write the body directly, never via response.sendError()
+
+- **Status:** accepted (Phase 3)
+- **Context:** found while testing that a VIEWER denied by `@PreAuthorize` got back 401 instead
+  of 403. Spring Security's default `AccessDeniedHandlerImpl` calls `response.sendError(403)`,
+  which triggers the servlet container's `/error` forward - under
+  `SessionCreationPolicy.STATELESS` that forward re-enters the same security filter chain as a
+  fresh, unauthenticated request, which the `authenticationEntryPoint` then challenges with 401,
+  silently overwriting the 403 before the client ever sees it.
+- **Decision:** `SecurityConfig` supplies custom `accessDeniedHandler`/`authenticationEntryPoint`
+  beans that write an RFC 7807 `ProblemDetail` body and set the status directly on the response,
+  never calling `sendError()`.
+- **Why:** this is the correct general fix for any stateless Spring Security setup, not a
+  one-off workaround - and it has the added benefit of making authn/authz failures return the
+  same `application/problem+json` shape as every other error in the API (section 7 Phase 3's
+  "consistent error format" goal).

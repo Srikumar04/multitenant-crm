@@ -23,6 +23,10 @@ spring:
     user: ${DB_MIGRATOR_USER:app_migrator}
     password: ${DB_MIGRATOR_PASSWORD:app_migrator}
 
+  mvc:
+    problemdetails:
+      enabled: true
+
 management:
   endpoints:
     web:

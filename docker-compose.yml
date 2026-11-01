@@ -30,6 +30,7 @@ services:
       DB_RUNTIME_USER: ${DB_RUNTIME_USER:-app_runtime}
       DB_RUNTIME_PASSWORD: ${DB_RUNTIME_PASSWORD:-app_runtime}
       JWT_SECRET: ${JWT_SECRET:-change-me-dev-only-change-me-dev-only}
+      SPRING_PROFILES_ACTIVE: json-logs
     ports:
       - "8080:8080"
 

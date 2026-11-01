@@ -1,8 +1,10 @@
 package com.srikumar.multitenantcrm.ratelimit;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.srikumar.multitenantcrm.config.MetricsConfig;
 import com.srikumar.multitenantcrm.tenancy.TenantContext;
 import io.github.bucket4j.ConsumptionProbe;
+import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -23,10 +25,12 @@ public class RateLimitFilter extends OncePerRequestFilter {
 
     private final RateLimitService rateLimitService;
     private final ObjectMapper objectMapper;
+    private final MeterRegistry meterRegistry;
 
-    public RateLimitFilter(RateLimitService rateLimitService, ObjectMapper objectMapper) {
+    public RateLimitFilter(RateLimitService rateLimitService, ObjectMapper objectMapper, MeterRegistry meterRegistry) {
         this.rateLimitService = rateLimitService;
         this.objectMapper = objectMapper;
+        this.meterRegistry = meterRegistry;
     }
 
     @Override
@@ -43,6 +47,9 @@ public class RateLimitFilter extends OncePerRequestFilter {
             filterChain.doFilter(request, response);
             return;
         }
+
+        meterRegistry.counter(MetricsConfig.RATE_LIMIT_REJECTIONS_METRIC, "tenant_id", tenantId.toString())
+                .increment();
 
         long retryAfterSeconds = Math.max(1, probe.getNanosToWaitForRefill() / 1_000_000_000);
         response.setStatus(HttpStatus.TOO_MANY_REQUESTS.value());

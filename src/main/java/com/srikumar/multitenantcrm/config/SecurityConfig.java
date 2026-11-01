@@ -7,6 +7,7 @@ import com.srikumar.multitenantcrm.idempotency.IdempotencyFilter;
 import com.srikumar.multitenantcrm.idempotency.IdempotencyKeyRepository;
 import com.srikumar.multitenantcrm.ratelimit.RateLimitFilter;
 import com.srikumar.multitenantcrm.ratelimit.RateLimitService;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.io.IOException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -54,7 +55,7 @@ public class SecurityConfig {
             .csrf(csrf -> csrf.disable())
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/actuator/health", "/actuator/health/**").permitAll()
+                .requestMatchers("/actuator/health", "/actuator/health/**", "/actuator/prometheus").permitAll()
                 .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/auth/login").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/tenants").hasRole("PLATFORM_ADMIN")
@@ -77,8 +78,8 @@ public class SecurityConfig {
     }
 
     @Bean
-    RateLimitFilter rateLimitFilter(RateLimitService rateLimitService, ObjectMapper objectMapper) {
-        return new RateLimitFilter(rateLimitService, objectMapper);
+    RateLimitFilter rateLimitFilter(RateLimitService rateLimitService, ObjectMapper objectMapper, MeterRegistry meterRegistry) {
+        return new RateLimitFilter(rateLimitService, objectMapper, meterRegistry);
     }
 
     @Bean

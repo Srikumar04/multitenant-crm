@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Two console formats, picked by Spring profile:
+  - default (local dev): the human-readable pattern from application.yml.
+  - "json-logs" profile (docker compose / anywhere logs get shipped or parsed): one JSON object
+    per line via logstash-logback-encoder, with tenantId pulled from MDC (set in
+    JwtAuthenticationFilter). See docs/decisions.md ADR 0009.
+-->
+<configuration>
+    <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+
+    <springProfile name="!json-logs">
+        <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+            <encoder>
+                <pattern>${CONSOLE_LOG_PATTERN}</pattern>
+            </encoder>
+        </appender>
+    </springProfile>
+
+    <springProfile name="json-logs">
+        <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+            <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+                <includeMdcKeyName>tenantId</includeMdcKeyName>
+                <customFields>{"service":"multitenant-crm"}</customFields>
+            </encoder>
+        </appender>
+    </springProfile>
+
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+    </root>
+</configuration>

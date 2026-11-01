@@ -140,3 +140,49 @@ added as it's implemented or revisited.
   convention this mirrors) are "replay whatever happened the first time," not "retry until
   success" - the caller asked a specific operation to happen once, and a retried request should
   see that one outcome, success or failure.
+
+## 0009 - JSON logs are a Spring profile, not the default
+
+- **Status:** accepted (Phase 5)
+- **Decision:** `logback-spring.xml` keeps the existing human-readable console pattern as the
+  default, and adds a `json-logs` Spring profile (via `logstash-logback-encoder`) that switches
+  the same console appender to one JSON object per line, with `tenantId` included from MDC.
+  Docker Compose's `app` service activates `json-logs`. `JwtAuthenticationFilter` puts the
+  resolved tenant id into MDC (`MDC.put("tenantId", ...)`, cleared in the same `finally` that
+  clears `TenantContext`) so every log line for a request - in either format - carries it, per
+  PROJECT_BRIEF.md section 7 Phase 5 item 1.
+- **Why a profile instead of switching the default:** `mvn test`/local `java -jar` runs are read
+  by a human in a terminal, where the existing `[tenant=...]` pattern is more scannable; JSON
+  earns its keep once logs are going somewhere that parses them (Docker Compose, a real
+  deployment), which is exactly where `json-logs` gets activated.
+
+## 0010 - Tenant-tagged metrics, cardinality-capped; `/actuator/prometheus` left unauthenticated
+
+- **Status:** accepted (Phase 5)
+- **Context:** Spring Boot 3's Micrometer Observation API replaced Boot 2's `WebMvcTagsProvider`
+  hook - `MetricsConfig` instead supplies a `ServerRequestObservationConvention` bean that adds a
+  `tenant_id` tag to `http.server.requests`. Tenants are created at runtime with no upper bound
+  (onboarding is just an admin API call), so tagging every meter by raw tenant id is an
+  unbounded-cardinality Prometheus time series waiting to happen.
+- **Decision:** a `MeterFilter.maximumAllowableTags(..., 300, MeterFilter.deny())` caps
+  `http.server.requests` (and the `ratelimit.rejections` counter `RateLimitFilter` increments on
+  every 429) at 300 distinct `tenant_id` values; requests from tenant 301+ still work normally,
+  they just stop growing that particular metric's cardinality. `/actuator/prometheus` was added
+  to `SecurityConfig`'s `permitAll` list (alongside `/actuator/health`) so it's actually
+  scrapeable - everything else under `/actuator` still requires authentication.
+- **Gotcha found while building this:** the tag can't be read from `TenantContext` at the point
+  the observation convention runs. `ServerHttpObservationFilter` (which records
+  `http.server.requests`) wraps the *entire* Spring Security filter chain and computes its tags
+  in its own `finally`, which runs *after* `JwtAuthenticationFilter`'s `finally` has already
+  cleared the `TenantContext` ThreadLocal on the way out. `JwtAuthenticationFilter` now also sets
+  a plain request attribute (`JwtAuthenticationFilter.TENANT_ID_REQUEST_ATTRIBUTE`), which the
+  observation convention reads instead - it lives as long as the request object, not the thread,
+  so the ordering doesn't matter.
+- **Why permit `/actuator/prometheus` unauthenticated:** there's no separate scrape-credential
+  concept in this project, and the alternative (platform-admin basic auth on every scrape) just
+  pushes the real problem - restricting *who can reach* the endpoint - onto a credential that
+  would have to be baked into a Prometheus config file instead. The endpoint only ever exposes
+  tenant *ids* and request counts/latencies, not tenant data.
+- **Revisit if:** this ever runs somewhere actually reachable from outside a trusted network -
+  the honest fix then is restricting the path at the network/ingress level (or a dedicated scrape
+  token), not application-level `permitAll`.

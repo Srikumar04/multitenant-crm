@@ -44,8 +44,8 @@ See [`docs/architecture.md`](docs/architecture.md).
 
 ## Benchmarks
 
-Not yet measured — see `PROJECT_BRIEF.md` section 9 and `docs/benchmarks.md` (added in
-Phase 5) for load test results (p50/p95/p99 latency, RPS, noisy-neighbor isolation).
+See [`docs/benchmarks.md`](docs/benchmarks.md) for measured k6 load test results (p50/p95/p99
+latency, RPS, error rate, and the noisy-neighbor isolation test) — scripts in `load-tests/`.
 
 ## Design decisions
 

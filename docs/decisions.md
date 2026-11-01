@@ -186,3 +186,34 @@ added as it's implemented or revisited.
 - **Revisit if:** this ever runs somewhere actually reachable from outside a trusted network -
   the honest fix then is restricting the path at the network/ingress level (or a dedicated scrape
   token), not application-level `permitAll`.
+
+## 0011 - A static HTML/CSS/JS frontend, CORS opened for its origin, plus the read endpoints it needed
+
+- **Status:** accepted
+- **Decision:** `frontend/` is plain HTML/CSS/JS - no npm, no build step, no framework - served
+  by its own `nginx:alpine` container in Docker Compose on port 8081. `SecurityConfig` gains a
+  `CorsConfigurationSource` bean (`app.cors.allowed-origins`, default `http://localhost:8081`)
+  so a browser on that origin can call the API on 8080. No cookies are used anywhere in this app
+  (JWT and platform-admin auth are both plain headers), so CORS credentials stay off, which keeps
+  the allowed-origins list simple instead of needing exact-origin echo-back logic.
+- **Why no framework:** this is a demo console for the backend's features (PROJECT_BRIEF.md's
+  actual subject), not a product with its own frontend architecture - a build toolchain would be
+  pure overhead for four pages and some fetch calls.
+- **Session storage, not local storage:** the JWT lives in `sessionStorage`, scoped per browser
+  tab. That turns "open two tabs, log into two tenants" into a live, visual isolation demo -
+  exactly the thing the automated test suite otherwise only proves in a report.
+- **New read endpoints, added because the frontend needed them, not speculatively:**
+  - `GET /api/tenants/me` - a tenant user's own name/plan/status/rate-limit, for the dashboard
+    header. Tenant lookups still go through `TenantRepository` directly (`TenantSelfService`),
+    the same pattern `RateLimitService` already uses, since `tenants` has no RLS (PROJECT_BRIEF.md
+    section 5) and is scoped by `TenantContext` manually instead.
+  - `GET /api/audit-log` (ADMIN) - PROJECT_BRIEF.md section 6 already specified "ADMIN: view
+    audit log" as a role capability, but no HTTP endpoint existed for it before this; `AuditLog`
+    rows were being written (Phase 3) but never read back through the API.
+  - `GET /api/webhooks` (ADMIN, via a `WebhookSubscriptionSummary` that has no `secret` field at
+    all - not just one that omits it at serialization time) and `DELETE /api/webhooks/{id}`
+    (ADMIN) - only `POST` existed before; there was no way to see or remove a subscription once
+    created.
+  - `GET /api/webhooks/dead-letters` (ADMIN) - the `webhook_dead_letters` table (Phase 4) had no
+    read path either; this makes the retry/dead-letter behavior (ADR 0007) actually observable
+    instead of only verifiable by querying the database directly.

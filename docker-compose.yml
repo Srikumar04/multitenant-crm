@@ -31,8 +31,18 @@ services:
       DB_RUNTIME_PASSWORD: ${DB_RUNTIME_PASSWORD:-app_runtime}
       JWT_SECRET: ${JWT_SECRET:-change-me-dev-only-change-me-dev-only}
       SPRING_PROFILES_ACTIVE: json-logs
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:8081}
     ports:
       - "8080:8080"
+
+  frontend:
+    image: nginx:alpine
+    depends_on:
+      - app
+    volumes:
+      - ./frontend:/usr/share/nginx/html:ro
+    ports:
+      - "8081:80"
 
 volumes:
   pg_data:

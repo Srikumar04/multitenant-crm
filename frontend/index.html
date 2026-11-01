@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>multitenant-crm admin</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div id="toasts" class="toasts"></div>
+<div id="rate-limit-banner" class="rate-limit-banner hidden">
+  Rate limited by your tenant's plan — retrying is safe in <span id="rate-limit-countdown">0</span>s.
+</div>
+
+<!-- ===================== LOGIN / ONBOARDING VIEW ===================== -->
+<main id="view-login" class="view">
+  <header class="hero">
+    <h1>multitenant-crm</h1>
+    <p>Admin console for the multi-tenant SaaS backend. Onboard a tenant, then log in as it.</p>
+  </header>
+
+  <div class="login-grid">
+    <section class="card">
+      <h2>1. Onboard a tenant <span class="badge badge-muted">platform admin</span></h2>
+      <p class="hint">Creates a tenant and its first ADMIN user. Needs the platform-admin
+        credentials (see <code>application.yml</code> / <code>.env</code>).</p>
+      <form id="form-onboard">
+        <div class="field-row">
+          <label>Platform admin username
+            <input name="adminUser" autocomplete="username" required value="platform-admin">
+          </label>
+          <label>Platform admin password
+            <input name="adminPass" type="password" autocomplete="current-password" required>
+          </label>
+        </div>
+        <div class="field-row">
+          <label>Tenant name
+            <input name="tenantName" required placeholder="Acme Inc.">
+          </label>
+          <label>Plan
+            <select name="plan">
+              <option value="free" selected>free (60 req/min)</option>
+              <option value="pro">pro (600 req/min)</option>
+            </select>
+          </label>
+        </div>
+        <div class="field-row">
+          <label>Admin email
+            <input name="tenantAdminEmail" type="email" required placeholder="admin@acme.test">
+          </label>
+          <label>Admin password
+            <input name="tenantAdminPassword" type="password" required minlength="4">
+          </label>
+        </div>
+        <button type="submit">Create tenant</button>
+      </form>
+      <div id="onboard-result" class="result hidden"></div>
+    </section>
+
+    <section class="card">
+      <h2>2. Log in</h2>
+      <p class="hint">Logs in as a tenant user and opens the dashboard for that tenant.</p>
+      <form id="form-login">
+        <label>Tenant ID
+          <input name="tenantId" required placeholder="00000000-0000-0000-0000-000000000000">
+        </label>
+        <label>Email
+          <input name="email" type="email" required>
+        </label>
+        <label>Password
+          <input name="password" type="password" required>
+        </label>
+        <button type="submit">Log in</button>
+      </form>
+      <div id="login-error" class="result result-error hidden"></div>
+
+      <div id="recent-tenants" class="recent hidden">
+        <h3>Recently used</h3>
+        <ul id="recent-tenants-list"></ul>
+      </div>
+    </section>
+  </div>
+
+  <section class="card settings-card">
+    <h2>Settings</h2>
+    <label>API base URL
+      <input id="api-base-input" placeholder="http://localhost:8080">
+    </label>
+  </section>
+</main>
+
+<!-- ===================== DASHBOARD VIEW ===================== -->
+<main id="view-dashboard" class="view hidden">
+  <header class="appbar">
+    <div class="appbar-left">
+      <strong id="dash-tenant-name">—</strong>
+      <span id="dash-tenant-id" class="muted mono"></span>
+    </div>
+    <div class="appbar-right">
+      <span id="dash-plan" class="badge"></span>
+      <span id="dash-role" class="badge badge-muted"></span>
+      <span id="dash-email" class="muted"></span>
+      <button id="btn-logout" class="btn-secondary">Log out</button>
+    </div>
+  </header>
+
+  <nav class="tabs">
+    <button class="tab-btn active" data-tab="contacts">Contacts</button>
+    <button class="tab-btn" data-tab="tickets">Tickets</button>
+    <button class="tab-btn admin-only" data-tab="webhooks">Webhooks</button>
+    <button class="tab-btn admin-only" data-tab="audit">Audit Log</button>
+  </nav>
+
+  <!-- CONTACTS -->
+  <section id="tab-contacts" class="tab-panel active">
+    <div class="toolbar">
+      <h2>Contacts</h2>
+      <button id="btn-new-contact" class="write-only">+ New contact</button>
+    </div>
+    <table class="data-table">
+      <thead><tr><th>Name</th><th>Email</th><th>Phone</th><th>Created</th><th class="write-only">Actions</th></tr></thead>
+      <tbody id="contacts-tbody"></tbody>
+    </table>
+    <div class="pagination" id="contacts-pagination"></div>
+  </section>
+
+  <!-- TICKETS -->
+  <section id="tab-tickets" class="tab-panel">
+    <div class="toolbar">
+      <h2>Tickets</h2>
+      <button id="btn-new-ticket" class="write-only">+ New ticket</button>
+    </div>
+    <table class="data-table">
+      <thead><tr><th>Title</th><th>Status</th><th>Priority</th><th>Contact</th><th>Created</th><th>Actions</th></tr></thead>
+      <tbody id="tickets-tbody"></tbody>
+    </table>
+    <div class="pagination" id="tickets-pagination"></div>
+  </section>
+
+  <!-- WEBHOOKS -->
+  <section id="tab-webhooks" class="tab-panel">
+    <div class="toolbar">
+      <h2>Webhook subscriptions</h2>
+      <button id="btn-new-webhook">+ New subscription</button>
+    </div>
+    <table class="data-table">
+      <thead><tr><th>URL</th><th>Event types</th><th>Created</th><th>Actions</th></tr></thead>
+      <tbody id="webhooks-tbody"></tbody>
+    </table>
+
+    <h2 class="section-spacer">Dead letters <span class="muted">(deliveries that exhausted all retries)</span></h2>
+    <table class="data-table">
+      <thead><tr><th>Event</th><th>Subscription</th><th>Attempts</th><th>Last error</th><th>Created</th></tr></thead>
+      <tbody id="dead-letters-tbody"></tbody>
+    </table>
+    <div class="pagination" id="dead-letters-pagination"></div>
+  </section>
+
+  <!-- AUDIT LOG -->
+  <section id="tab-audit" class="tab-panel">
+    <div class="toolbar">
+      <h2>Audit log</h2>
+    </div>
+    <table class="data-table">
+      <thead><tr><th>When</th><th>Action</th><th>Entity</th><th>Entity ID</th><th>Actor</th><th></th></tr></thead>
+      <tbody id="audit-tbody"></tbody>
+    </table>
+    <div class="pagination" id="audit-pagination"></div>
+  </section>
+</main>
+
+<!-- ===================== DIALOGS ===================== -->
+<dialog id="dlg-contact">
+  <form method="dialog" id="form-contact">
+    <h3 id="dlg-contact-title">New contact</h3>
+    <input type="hidden" name="id">
+    <label>Name <input name="name" required></label>
+    <label>Email <input name="email" type="email" required></label>
+    <label>Phone <input name="phone"></label>
+    <div class="dlg-actions">
+      <button type="button" class="btn-secondary" data-close>Cancel</button>
+      <button type="submit" value="save">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="dlg-ticket">
+  <form method="dialog" id="form-ticket">
+    <h3 id="dlg-ticket-title">New ticket</h3>
+    <input type="hidden" name="id">
+    <label>Contact
+      <select name="contactId" required></select>
+    </label>
+    <label>Title <input name="title" required></label>
+    <div class="field-row">
+      <label>Status
+        <select name="status">
+          <option>OPEN</option><option>IN_PROGRESS</option><option>RESOLVED</option><option>CLOSED</option>
+        </select>
+      </label>
+      <label>Priority
+        <select name="priority">
+          <option>LOW</option><option selected>MEDIUM</option><option>HIGH</option><option>URGENT</option>
+        </select>
+      </label>
+    </div>
+    <label>Assignee user ID <span class="muted">(optional)</span> <input name="assigneeId"></label>
+    <div class="dlg-actions">
+      <button type="button" class="btn-secondary" data-close>Cancel</button>
+      <button type="submit" value="save">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="dlg-comments">
+  <div>
+    <h3>Comments</h3>
+    <div id="comments-list" class="comments-list"></div>
+    <form id="form-comment" class="write-only">
+      <textarea name="body" placeholder="Add a comment…" required></textarea>
+      <div class="dlg-actions">
+        <button type="button" class="btn-secondary" data-close>Close</button>
+        <button type="submit">Add comment</button>
+      </div>
+    </form>
+  </div>
+</dialog>
+
+<dialog id="dlg-webhook">
+  <form method="dialog" id="form-webhook">
+    <h3>New webhook subscription</h3>
+    <label>URL <input name="url" type="url" required placeholder="https://example.com/hooks/crm"></label>
+    <fieldset>
+      <legend>Event types</legend>
+      <label class="checkbox"><input type="checkbox" name="eventTypes" value="contact.created"> contact.created</label>
+      <label class="checkbox"><input type="checkbox" name="eventTypes" value="contact.updated"> contact.updated</label>
+      <label class="checkbox"><input type="checkbox" name="eventTypes" value="contact.deleted"> contact.deleted</label>
+      <label class="checkbox"><input type="checkbox" name="eventTypes" value="ticket.created"> ticket.created</label>
+      <label class="checkbox"><input type="checkbox" name="eventTypes" value="ticket.updated"> ticket.updated</label>
+      <label class="checkbox"><input type="checkbox" name="eventTypes" value="ticket.deleted"> ticket.deleted</label>
+    </fieldset>
+    <div class="dlg-actions">
+      <button type="button" class="btn-secondary" data-close>Cancel</button>
+      <button type="submit" value="save">Create</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="dlg-secret">
+  <div>
+    <h3>Save this secret now</h3>
+    <p class="hint">It's shown once. Deliveries to this subscription are signed
+      <code>HMAC-SHA256(secret, body)</code> in an <code>X-Webhook-Signature</code> header.</p>
+    <code id="secret-value" class="secret-box"></code>
+    <div class="dlg-actions">
+      <button type="button" class="btn-secondary" id="btn-copy-secret">Copy</button>
+      <button type="button" data-close>Done</button>
+    </div>
+  </div>
+</dialog>
+
+<dialog id="dlg-json">
+  <div>
+    <h3 id="dlg-json-title">Details</h3>
+    <pre id="dlg-json-content" class="json-box"></pre>
+    <div class="dlg-actions">
+      <button type="button" data-close>Close</button>
+    </div>
+  </div>
+</dialog>
+
+<script src="app.js"></script>
+</body>
+</html>

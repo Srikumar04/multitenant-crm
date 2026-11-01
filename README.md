@@ -7,7 +7,9 @@ and [`docs/benchmarks.md`](docs/benchmarks.md) for measured load test results.
 
 **Status:** feature-complete through `PROJECT_BRIEF.md` section 7 Phase 5 — schema & RLS
 isolation, JWT auth, CRUD with audit logging, per-tenant rate limiting, signed webhooks with
-retries, idempotency keys, tenant-tagged metrics, JSON logs, and measured k6 benchmarks.
+retries, idempotency keys, tenant-tagged metrics, JSON logs, and measured k6 benchmarks — plus a
+plain HTML/CSS/JS admin console (`frontend/`, not part of the original brief) to demo it all
+without curl or Swagger.
 
 ## What this is
 
@@ -87,8 +89,18 @@ curl http://localhost:8080/actuator/health
 # {"status":"UP"}
 ```
 
+- Admin console (frontend): http://localhost:8081
 - API docs: http://localhost:8080/swagger-ui.html
 - Tenant-tagged Prometheus metrics: http://localhost:8080/actuator/prometheus
+
+## Frontend
+
+A plain HTML/CSS/JS admin console lives in [`frontend/`](frontend/README.md) — tenant
+onboarding/login, contacts/tickets CRUD, webhook subscription management, and an audit log
+viewer, all against the real API. `docker compose up` serves it at http://localhost:8081 (nginx)
+with CORS already configured on the backend for that origin (ADR 0011). Not part of
+`PROJECT_BRIEF.md`'s original scope — added on request to make the backend's isolation and
+feature set demoable without curl or Swagger.
 
 ## Running tests
 
@@ -96,7 +108,7 @@ curl http://localhost:8080/actuator/health
 mvn verify
 ```
 
-27 tests, including an isolation suite that runs against a real Postgres instance via
+33 tests, including an isolation suite that runs against a real Postgres instance via
 Testcontainers — no mocked database, so the RLS policies are genuinely exercised.
 
 ## Load testing

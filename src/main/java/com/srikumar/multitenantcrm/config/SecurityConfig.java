@@ -9,6 +9,7 @@ import com.srikumar.multitenantcrm.ratelimit.RateLimitFilter;
 import com.srikumar.multitenantcrm.ratelimit.RateLimitService;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.io.IOException;
+import java.util.List;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -32,6 +33,9 @@ import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.AccessDeniedHandler;
 import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 /**
  * JWT auth for tenant-scoped requests (populates TenantContext for RLS), plus HTTP Basic for a
@@ -52,6 +56,7 @@ public class SecurityConfig {
             ObjectMapper objectMapper)
             throws Exception {
         http
+            .cors(Customizer.withDefaults())
             .csrf(csrf -> csrf.disable())
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
@@ -80,6 +85,24 @@ public class SecurityConfig {
     @Bean
     RateLimitFilter rateLimitFilter(RateLimitService rateLimitService, ObjectMapper objectMapper, MeterRegistry meterRegistry) {
         return new RateLimitFilter(rateLimitService, objectMapper, meterRegistry);
+    }
+
+    /**
+     * Lets the static frontend (served from a different origin - `frontend/`, Docker Compose's
+     * `frontend` service) call this API from a browser. No cookies are involved anywhere in this
+     * app (JWT and platform-admin Basic auth are both plain headers), so credentials stay
+     * disabled - that keeps `allowedOrigins` usable as-is instead of needing exact-origin-only
+     * matching.
+     */
+    @Bean
+    CorsConfigurationSource corsConfigurationSource(@Value("${app.cors.allowed-origins}") String allowedOrigins) {
+        CorsConfiguration configuration = new CorsConfiguration();
+        configuration.setAllowedOrigins(List.of(allowedOrigins.split(",")));
+        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "Idempotency-Key"));
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", configuration);
+        return source;
     }
 
     @Bean

@@ -36,6 +36,9 @@ app:
   jwt:
     secret: ${JWT_SECRET:change-me-dev-only-change-me-dev-only}
     expiration-minutes: 60
+  platform-admin:
+    username: ${PLATFORM_ADMIN_USERNAME:platform-admin}
+    password: ${PLATFORM_ADMIN_PASSWORD:change-me-dev-only}
 
 logging:
   pattern:

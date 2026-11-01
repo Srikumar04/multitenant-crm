@@ -1,0 +1,61 @@
+databaseChangeLog:
+  - changeSet:
+      id: 005-create-ticket-comments-table
+      author: sri
+      changes:
+        - createTable:
+            tableName: ticket_comments
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: tenant_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+              - column:
+                  name: ticket_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+              - column:
+                  name: author_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+              - column:
+                  name: body
+                  type: TEXT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: TIMESTAMP
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+  - changeSet:
+      id: 005b-ticket-comments-tenant-fk
+      author: sri
+      changes:
+        - addForeignKeyConstraint:
+            baseTableName: ticket_comments
+            baseColumnNames: tenant_id
+            referencedTableName: tenants
+            referencedColumnNames: id
+            constraintName: fk_ticket_comments_tenant
+  - changeSet:
+      id: 005c-ticket-comments-ticket-composite-fk
+      author: sri
+      comment: Composite FK so a comment cannot reference a ticket belonging to a different tenant.
+      changes:
+        - addForeignKeyConstraint:
+            baseTableName: ticket_comments
+            baseColumnNames: tenant_id, ticket_id
+            referencedTableName: tickets
+            referencedColumnNames: tenant_id, id
+            constraintName: fk_ticket_comments_tenant_ticket

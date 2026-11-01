@@ -1,0 +1,58 @@
+databaseChangeLog:
+  - changeSet:
+      id: 003-create-contacts-table
+      author: sri
+      changes:
+        - createTable:
+            tableName: contacts
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: tenant_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+              - column:
+                  name: name
+                  type: VARCHAR(255)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: email
+                  type: VARCHAR(255)
+              - column:
+                  name: phone
+                  type: VARCHAR(50)
+              - column:
+                  name: created_by
+                  type: UUID
+              - column:
+                  name: created_at
+                  type: TIMESTAMP
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+  - changeSet:
+      id: 003b-contacts-tenant-fk
+      author: sri
+      changes:
+        - addForeignKeyConstraint:
+            baseTableName: contacts
+            baseColumnNames: tenant_id
+            referencedTableName: tenants
+            referencedColumnNames: id
+            constraintName: fk_contacts_tenant
+  - changeSet:
+      id: 003c-contacts-tenant-id-unique
+      author: sri
+      comment: Required so tickets can composite-FK reference (tenant_id, id) on this table.
+      changes:
+        - addUniqueConstraint:
+            tableName: contacts
+            columnNames: tenant_id, id
+            constraintName: uq_contacts_tenant_id

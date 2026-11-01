@@ -1,0 +1,50 @@
+databaseChangeLog:
+  - changeSet:
+      id: 007-tenant-isolation-rls-policies
+      author: sri
+      comment: >
+        Enables RLS on every tenant-owned table and forces it (so even the table owner,
+        app_migrator, is subject to it - app_runtime never owns these tables anyway, but FORCE
+        is defense in depth per PROJECT_BRIEF.md section 4). The policy compares tenant_id
+        against app.current_tenant, set per-transaction by TenantAwareJpaTransactionManager.
+        NULLIF(..., '')::uuid turns an unset or blank setting into NULL rather than a cast
+        error, so "no tenant set" fails closed (zero rows) instead of raising an error.
+      changes:
+        - sql:
+            splitStatements: true
+            sql: |
+              ALTER TABLE users ENABLE ROW LEVEL SECURITY;
+              ALTER TABLE users FORCE ROW LEVEL SECURITY;
+              CREATE POLICY tenant_isolation ON users
+                  USING (tenant_id = NULLIF(current_setting('app.current_tenant', true), '')::uuid)
+                  WITH CHECK (tenant_id = NULLIF(current_setting('app.current_tenant', true), '')::uuid);
+
+              ALTER TABLE contacts ENABLE ROW LEVEL SECURITY;
+              ALTER TABLE contacts FORCE ROW LEVEL SECURITY;
+              CREATE POLICY tenant_isolation ON contacts
+                  USING (tenant_id = NULLIF(current_setting('app.current_tenant', true), '')::uuid)
+                  WITH CHECK (tenant_id = NULLIF(current_setting('app.current_tenant', true), '')::uuid);
+
+              ALTER TABLE tickets ENABLE ROW LEVEL SECURITY;
+              ALTER TABLE tickets FORCE ROW LEVEL SECURITY;
+              CREATE POLICY tenant_isolation ON tickets
+                  USING (tenant_id = NULLIF(current_setting('app.current_tenant', true), '')::uuid)
+                  WITH CHECK (tenant_id = NULLIF(current_setting('app.current_tenant', true), '')::uuid);
+
+              ALTER TABLE ticket_comments ENABLE ROW LEVEL SECURITY;
+              ALTER TABLE ticket_comments FORCE ROW LEVEL SECURITY;
+              CREATE POLICY tenant_isolation ON ticket_comments
+                  USING (tenant_id = NULLIF(current_setting('app.current_tenant', true), '')::uuid)
+                  WITH CHECK (tenant_id = NULLIF(current_setting('app.current_tenant', true), '')::uuid);
+
+              ALTER TABLE audit_log ENABLE ROW LEVEL SECURITY;
+              ALTER TABLE audit_log FORCE ROW LEVEL SECURITY;
+              CREATE POLICY tenant_isolation ON audit_log
+                  USING (tenant_id = NULLIF(current_setting('app.current_tenant', true), '')::uuid)
+                  WITH CHECK (tenant_id = NULLIF(current_setting('app.current_tenant', true), '')::uuid);
+      rollback:
+        - sql: DROP POLICY IF EXISTS tenant_isolation ON users;
+        - sql: DROP POLICY IF EXISTS tenant_isolation ON contacts;
+        - sql: DROP POLICY IF EXISTS tenant_isolation ON tickets;
+        - sql: DROP POLICY IF EXISTS tenant_isolation ON ticket_comments;
+        - sql: DROP POLICY IF EXISTS tenant_isolation ON audit_log;

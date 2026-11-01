@@ -1,0 +1,80 @@
+databaseChangeLog:
+  - changeSet:
+      id: 004-create-tickets-table
+      author: sri
+      changes:
+        - createTable:
+            tableName: tickets
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: tenant_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+              - column:
+                  name: contact_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+              - column:
+                  name: title
+                  type: VARCHAR(255)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: status
+                  type: VARCHAR(50)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: priority
+                  type: VARCHAR(50)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: assignee_id
+                  type: UUID
+              - column:
+                  name: created_at
+                  type: TIMESTAMP
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+  - changeSet:
+      id: 004b-tickets-tenant-fk
+      author: sri
+      changes:
+        - addForeignKeyConstraint:
+            baseTableName: tickets
+            baseColumnNames: tenant_id
+            referencedTableName: tenants
+            referencedColumnNames: id
+            constraintName: fk_tickets_tenant
+  - changeSet:
+      id: 004c-tickets-contact-composite-fk
+      author: sri
+      comment: >
+        Composite FK so a ticket cannot reference a contact belonging to a different tenant,
+        even if application code gets the tenant check wrong.
+      changes:
+        - addForeignKeyConstraint:
+            baseTableName: tickets
+            baseColumnNames: tenant_id, contact_id
+            referencedTableName: contacts
+            referencedColumnNames: tenant_id, id
+            constraintName: fk_tickets_tenant_contact
+  - changeSet:
+      id: 004d-tickets-tenant-id-unique
+      author: sri
+      comment: Required so ticket_comments can composite-FK reference (tenant_id, id) on this table.
+      changes:
+        - addUniqueConstraint:
+            tableName: tickets
+            columnNames: tenant_id, id
+            constraintName: uq_tickets_tenant_id

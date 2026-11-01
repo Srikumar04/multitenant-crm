@@ -1,0 +1,81 @@
+databaseChangeLog:
+  - changeSet:
+      id: 010-create-idempotency-keys-table
+      author: sri
+      changes:
+        - createTable:
+            tableName: idempotency_keys
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: tenant_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+              - column:
+                  name: idempotency_key
+                  type: VARCHAR(255)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: request_method
+                  type: VARCHAR(10)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: request_path
+                  type: VARCHAR(500)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: response_status
+                  type: INTEGER
+                  constraints:
+                    nullable: false
+              - column:
+                  name: response_body
+                  type: TEXT
+              - column:
+                  name: created_at
+                  type: TIMESTAMP
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+  - changeSet:
+      id: 010b-idempotency-keys-tenant-fk
+      author: sri
+      changes:
+        - addForeignKeyConstraint:
+            baseTableName: idempotency_keys
+            baseColumnNames: tenant_id
+            referencedTableName: tenants
+            referencedColumnNames: id
+            constraintName: fk_idempotency_keys_tenant
+  - changeSet:
+      id: 010c-idempotency-keys-unique
+      author: sri
+      changes:
+        - addUniqueConstraint:
+            tableName: idempotency_keys
+            columnNames: tenant_id, idempotency_key, request_method, request_path
+            constraintName: uq_idempotency_keys_scope
+  - changeSet:
+      id: 010d-tenant-isolation-rls-idempotency-keys
+      author: sri
+      comment: Same tenant-isolation RLS pattern as 007-rls-policies.yaml.
+      changes:
+        - sql:
+            splitStatements: true
+            sql: |
+              ALTER TABLE idempotency_keys ENABLE ROW LEVEL SECURITY;
+              ALTER TABLE idempotency_keys FORCE ROW LEVEL SECURITY;
+              CREATE POLICY tenant_isolation ON idempotency_keys
+                  USING (tenant_id = NULLIF(current_setting('app.current_tenant', true), '')::uuid)
+                  WITH CHECK (tenant_id = NULLIF(current_setting('app.current_tenant', true), '')::uuid);
+      rollback:
+        - sql: DROP POLICY IF EXISTS tenant_isolation ON idempotency_keys;

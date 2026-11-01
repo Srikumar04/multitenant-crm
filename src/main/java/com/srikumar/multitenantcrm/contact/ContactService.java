@@ -4,6 +4,7 @@ import com.srikumar.multitenantcrm.audit.AuditLogService;
 import com.srikumar.multitenantcrm.common.ResourceNotFoundException;
 import com.srikumar.multitenantcrm.tenancy.CurrentUserContext;
 import com.srikumar.multitenantcrm.tenancy.TenantContext;
+import com.srikumar.multitenantcrm.webhook.WebhookDispatchService;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -15,14 +16,17 @@ public class ContactService {
 
     private final ContactRepository contactRepository;
     private final AuditLogService auditLogService;
+    private final WebhookDispatchService webhookDispatchService;
     private final TransactionTemplate transactionTemplate;
 
     public ContactService(
             ContactRepository contactRepository,
             AuditLogService auditLogService,
+            WebhookDispatchService webhookDispatchService,
             TransactionTemplate transactionTemplate) {
         this.contactRepository = contactRepository;
         this.auditLogService = auditLogService;
+        this.webhookDispatchService = webhookDispatchService;
         this.transactionTemplate = transactionTemplate;
     }
 
@@ -45,8 +49,12 @@ public class ContactService {
             contact.setEmail(request.email());
             contact.setPhone(request.phone());
             contact.setCreatedBy(CurrentUserContext.getUserId());
-            Contact saved = contactRepository.save(contact);
+            // saveAndFlush, not save: @CreationTimestamp is generated at flush time, and the
+            // audit log / webhook payload built right below need the real value, not null.
+            Contact saved = contactRepository.saveAndFlush(contact);
             auditLogService.record("CREATE", "Contact", saved.getId(), null, ContactResponse.from(saved));
+            webhookDispatchService.dispatchAfterCommit(
+                    saved.getTenantId(), "contact.created", ContactResponse.from(saved));
             return saved;
         });
     }
@@ -60,6 +68,8 @@ public class ContactService {
             existing.setPhone(request.phone());
             Contact saved = contactRepository.save(existing);
             auditLogService.record("UPDATE", "Contact", saved.getId(), before, ContactResponse.from(saved));
+            webhookDispatchService.dispatchAfterCommit(
+                    saved.getTenantId(), "contact.updated", ContactResponse.from(saved));
             return saved;
         });
     }
@@ -69,6 +79,8 @@ public class ContactService {
             Contact existing = contactRepository.findById(id).orElseThrow(() -> notFound(id));
             contactRepository.delete(existing);
             auditLogService.record("DELETE", "Contact", id, ContactResponse.from(existing), null);
+            webhookDispatchService.dispatchAfterCommit(
+                    existing.getTenantId(), "contact.deleted", ContactResponse.from(existing));
             return null;
         });
     }

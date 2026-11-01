@@ -43,6 +43,12 @@ app:
   platform-admin:
     username: ${PLATFORM_ADMIN_USERNAME:platform-admin}
     password: ${PLATFORM_ADMIN_PASSWORD:change-me-dev-only}
+  rate-limit:
+    free-requests-per-minute: ${RATE_LIMIT_FREE:60}
+    pro-requests-per-minute: ${RATE_LIMIT_PRO:600}
+  webhooks:
+    max-attempts: ${WEBHOOK_MAX_ATTEMPTS:3}
+    backoff-ms: ${WEBHOOK_BACKOFF_MS:1000,2000,4000}
 
 logging:
   pattern:

@@ -46,7 +46,9 @@ public class TicketCommentService {
             comment.setTicketId(ticketId);
             comment.setAuthorId(CurrentUserContext.getUserId());
             comment.setBody(request.body());
-            TicketComment saved = ticketCommentRepository.save(comment);
+            // saveAndFlush, not save: @CreationTimestamp is generated at flush time, and the
+            // audit log "after" snapshot built right below needs the real value, not null.
+            TicketComment saved = ticketCommentRepository.saveAndFlush(comment);
             auditLogService.record(
                     "CREATE", "TicketComment", saved.getId(), null, TicketCommentResponse.from(saved));
             return saved;

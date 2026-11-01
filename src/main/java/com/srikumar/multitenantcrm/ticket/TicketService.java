@@ -3,6 +3,7 @@ package com.srikumar.multitenantcrm.ticket;
 import com.srikumar.multitenantcrm.audit.AuditLogService;
 import com.srikumar.multitenantcrm.common.ResourceNotFoundException;
 import com.srikumar.multitenantcrm.tenancy.TenantContext;
+import com.srikumar.multitenantcrm.webhook.WebhookDispatchService;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -14,14 +15,17 @@ public class TicketService {
 
     private final TicketRepository ticketRepository;
     private final AuditLogService auditLogService;
+    private final WebhookDispatchService webhookDispatchService;
     private final TransactionTemplate transactionTemplate;
 
     public TicketService(
             TicketRepository ticketRepository,
             AuditLogService auditLogService,
+            WebhookDispatchService webhookDispatchService,
             TransactionTemplate transactionTemplate) {
         this.ticketRepository = ticketRepository;
         this.auditLogService = auditLogService;
+        this.webhookDispatchService = webhookDispatchService;
         this.transactionTemplate = transactionTemplate;
     }
 
@@ -45,8 +49,11 @@ public class TicketService {
             ticket.setStatus(request.status());
             ticket.setPriority(request.priority());
             ticket.setAssigneeId(request.assigneeId());
-            Ticket saved = ticketRepository.save(ticket);
+            // saveAndFlush, not save: @CreationTimestamp is generated at flush time, and the
+            // audit log / webhook payload built right below need the real value, not null.
+            Ticket saved = ticketRepository.saveAndFlush(ticket);
             auditLogService.record("CREATE", "Ticket", saved.getId(), null, TicketResponse.from(saved));
+            webhookDispatchService.dispatchAfterCommit(saved.getTenantId(), "ticket.created", TicketResponse.from(saved));
             return saved;
         });
     }
@@ -62,6 +69,7 @@ public class TicketService {
             existing.setAssigneeId(request.assigneeId());
             Ticket saved = ticketRepository.save(existing);
             auditLogService.record("UPDATE", "Ticket", saved.getId(), before, TicketResponse.from(saved));
+            webhookDispatchService.dispatchAfterCommit(saved.getTenantId(), "ticket.updated", TicketResponse.from(saved));
             return saved;
         });
     }
@@ -71,6 +79,8 @@ public class TicketService {
             Ticket existing = ticketRepository.findById(id).orElseThrow(() -> notFound(id));
             ticketRepository.delete(existing);
             auditLogService.record("DELETE", "Ticket", id, TicketResponse.from(existing), null);
+            webhookDispatchService.dispatchAfterCommit(
+                    existing.getTenantId(), "ticket.deleted", TicketResponse.from(existing));
             return null;
         });
     }

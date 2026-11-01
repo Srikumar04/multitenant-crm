@@ -75,3 +75,68 @@ added as it's implemented or revisited.
   one-off workaround - and it has the added benefit of making authn/authz failures return the
   same `application/problem+json` shape as every other error in the API (section 7 Phase 3's
   "consistent error format" goal).
+
+## 0006 - Rate limits are plan-based token buckets, in-process, keyed by tenant id
+
+- **Status:** accepted (Phase 4)
+- **Decision:** `RateLimitService` keeps one Bucket4j token bucket per tenant in a plain
+  `ConcurrentHashMap`, sized from the tenant's `plan` column (free: 60 req/min, pro: 600 req/min -
+  PROJECT_BRIEF.md section 9's example numbers, configurable via `app.rate-limit.*` /
+  `RATE_LIMIT_FREE` / `RATE_LIMIT_PRO`). `RateLimitFilter` runs immediately after
+  `JwtAuthenticationFilter` (TenantContext is already populated) and returns 429 with a
+  `Retry-After` header and a problem+json body when a bucket is exhausted.
+- **Why in-process, not Redis:** PROJECT_BRIEF.md section 3 explicitly defers Redis to "later, if
+  needed." A single-instance deployment has no cross-instance state to share, so an in-memory map
+  is strictly simpler and has nothing to get out of sync.
+- **Revisit if:** the app runs as more than one instance - an in-memory bucket per instance would
+  let a tenant get roughly `limit * instance_count` requests through, defeating the limit.
+
+## 0007 - Webhook delivery dispatches after commit, off the request thread
+
+- **Status:** accepted (Phase 4)
+- **Decision:** `ContactService`/`TicketService` register a `TransactionSynchronization`
+  (`afterCommit`) inside their existing `TransactionTemplate.execute()` block that calls
+  `WebhookDeliveryService`'s `@Async` delivery method, passing tenant id, subscription id and the
+  already-serialized payload as plain parameters rather than letting the async method read
+  `TenantContext` (a `ThreadLocal` that isn't populated on the executor's thread). The async
+  method sets `TenantContext` itself, only for the DB calls it actually needs (looking up
+  subscriptions, writing a dead-letter row).
+- **Why:** a webhook receiver is someone else's server - it can be slow, down, or actively
+  malicious. Delivering synchronously on the request thread would let a bad receiver degrade or
+  fail the API response for an operation that already succeeded. Dispatching only `afterCommit`
+  (not inline in the service method) also avoids firing a webhook for a change that gets rolled
+  back later in the same transaction.
+- **Gotcha found while building this:** looking up subscriptions inside the `afterCommit`
+  callback using the shared, default-propagation `TransactionTemplate` silently returned zero
+  rows, even for a subscription that definitely existed. `afterCommit()` runs while the
+  triggering transaction's resources are still bound to the thread (full cleanup happens
+  slightly later), so a `PROPAGATION_REQUIRED` call inside it just joins that already-committed,
+  about-to-be-discarded transaction instead of starting a fresh one. Fixed by giving
+  `WebhookDispatchService` its own `TransactionTemplate` built with
+  `PROPAGATION_REQUIRES_NEW` for that specific lookup.
+- **Secret/signature scheme:** each subscription gets a server-generated random secret (shown
+  once, at creation). Every delivery is signed `HMAC-SHA256(secret, rawJsonBody)` and sent as an
+  `X-Webhook-Signature: sha256=<hex>` header, the same convention GitHub/Stripe use, so a receiver
+  can verify authenticity without a shared-nothing allowlist.
+- **Retries:** a fixed attempt count with configurable backoff (`app.webhooks.max-attempts`,
+  `app.webhooks.backoff-ms`), exhausting into a `webhook_dead_letters` row with the last error -
+  per PROJECT_BRIEF.md section 7 Phase 4. Comments don't fire webhooks (contacts and tickets do);
+  the brief doesn't enumerate exact event types, and extending to comments later is a small,
+  isolated addition once there's a real subscriber asking for it.
+
+## 0008 - Idempotency keys are scoped to (tenant, key, method, path)
+
+- **Status:** accepted (Phase 4)
+- **Decision:** `IdempotencyFilter` runs after `JwtAuthenticationFilter`, and for a POST request
+  carrying an `Idempotency-Key` header, looks up a stored response by tenant id + key + HTTP
+  method + path. A hit replays the exact stored status and body without invoking the handler
+  again; a miss runs the request normally (via `ContentCachingResponseWrapper`) and stores
+  whatever response came back - including an error - before returning it.
+- **Why scope by method+path too, not just the key:** a client is expected to generate a fresh
+  key per logical operation, but scoping narrowly costs nothing and prevents an accidental key
+  collision between two different endpoints from one tenant silently replaying the wrong
+  resource's response.
+- **Why cache failures too:** standard idempotency-key semantics (as in the Stripe/GitHub
+  convention this mirrors) are "replay whatever happened the first time," not "retry until
+  success" - the caller asked a specific operation to happen once, and a retried request should
+  see that one outcome, success or failure.

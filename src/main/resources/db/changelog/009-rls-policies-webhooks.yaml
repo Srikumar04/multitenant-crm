@@ -1,0 +1,23 @@
+databaseChangeLog:
+  - changeSet:
+      id: 009-tenant-isolation-rls-policies-webhooks
+      author: sri
+      comment: Same tenant-isolation RLS pattern as 007-rls-policies.yaml, for the Phase 4 tables.
+      changes:
+        - sql:
+            splitStatements: true
+            sql: |
+              ALTER TABLE webhook_subscriptions ENABLE ROW LEVEL SECURITY;
+              ALTER TABLE webhook_subscriptions FORCE ROW LEVEL SECURITY;
+              CREATE POLICY tenant_isolation ON webhook_subscriptions
+                  USING (tenant_id = NULLIF(current_setting('app.current_tenant', true), '')::uuid)
+                  WITH CHECK (tenant_id = NULLIF(current_setting('app.current_tenant', true), '')::uuid);
+
+              ALTER TABLE webhook_dead_letters ENABLE ROW LEVEL SECURITY;
+              ALTER TABLE webhook_dead_letters FORCE ROW LEVEL SECURITY;
+              CREATE POLICY tenant_isolation ON webhook_dead_letters
+                  USING (tenant_id = NULLIF(current_setting('app.current_tenant', true), '')::uuid)
+                  WITH CHECK (tenant_id = NULLIF(current_setting('app.current_tenant', true), '')::uuid);
+      rollback:
+        - sql: DROP POLICY IF EXISTS tenant_isolation ON webhook_subscriptions;
+        - sql: DROP POLICY IF EXISTS tenant_isolation ON webhook_dead_letters;

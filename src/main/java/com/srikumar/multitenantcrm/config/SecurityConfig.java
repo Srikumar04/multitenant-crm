@@ -3,6 +3,10 @@ package com.srikumar.multitenantcrm.config;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.srikumar.multitenantcrm.auth.JwtAuthenticationFilter;
 import com.srikumar.multitenantcrm.auth.JwtService;
+import com.srikumar.multitenantcrm.idempotency.IdempotencyFilter;
+import com.srikumar.multitenantcrm.idempotency.IdempotencyKeyRepository;
+import com.srikumar.multitenantcrm.ratelimit.RateLimitFilter;
+import com.srikumar.multitenantcrm.ratelimit.RateLimitService;
 import java.io.IOException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -26,6 +30,7 @@ import org.springframework.security.provisioning.InMemoryUserDetailsManager;
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.AccessDeniedHandler;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * JWT auth for tenant-scoped requests (populates TenantContext for RLS), plus HTTP Basic for a
@@ -39,7 +44,11 @@ public class SecurityConfig {
 
     @Bean
     SecurityFilterChain filterChain(
-            HttpSecurity http, JwtAuthenticationFilter jwtAuthenticationFilter, ObjectMapper objectMapper)
+            HttpSecurity http,
+            JwtAuthenticationFilter jwtAuthenticationFilter,
+            IdempotencyFilter idempotencyFilter,
+            RateLimitFilter rateLimitFilter,
+            ObjectMapper objectMapper)
             throws Exception {
         http
             .csrf(csrf -> csrf.disable())
@@ -61,8 +70,20 @@ public class SecurityConfig {
                         objectMapper, HttpStatus.UNAUTHORIZED, "Full authentication is required to access this resource"))
             )
             .httpBasic(Customizer.withDefaults())
-            .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+            .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+            .addFilterAfter(idempotencyFilter, JwtAuthenticationFilter.class)
+            .addFilterAfter(rateLimitFilter, IdempotencyFilter.class);
         return http.build();
+    }
+
+    @Bean
+    RateLimitFilter rateLimitFilter(RateLimitService rateLimitService, ObjectMapper objectMapper) {
+        return new RateLimitFilter(rateLimitService, objectMapper);
+    }
+
+    @Bean
+    IdempotencyFilter idempotencyFilter(IdempotencyKeyRepository idempotencyKeyRepository, TransactionTemplate transactionTemplate) {
+        return new IdempotencyFilter(idempotencyKeyRepository, transactionTemplate);
     }
 
     private AccessDeniedHandler problemDetailHandler(ObjectMapper objectMapper, HttpStatus status, String detail) {

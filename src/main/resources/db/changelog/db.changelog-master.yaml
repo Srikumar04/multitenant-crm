@@ -13,3 +13,9 @@ databaseChangeLog:
       file: db/changelog/006-audit-log-table.yaml
   - include:
       file: db/changelog/007-rls-policies.yaml
+  - include:
+      file: db/changelog/008-webhooks-tables.yaml
+  - include:
+      file: db/changelog/009-rls-policies-webhooks.yaml
+  - include:
+      file: db/changelog/010-idempotency-keys-table.yaml

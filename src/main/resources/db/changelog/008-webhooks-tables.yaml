@@ -1,0 +1,127 @@
+databaseChangeLog:
+  - changeSet:
+      id: 008-create-webhook-subscriptions-table
+      author: sri
+      changes:
+        - createTable:
+            tableName: webhook_subscriptions
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: tenant_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+              - column:
+                  name: url
+                  type: VARCHAR(2048)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: event_types
+                  type: VARCHAR(500)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: secret
+                  type: VARCHAR(255)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: TIMESTAMP
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+  - changeSet:
+      id: 008b-webhook-subscriptions-tenant-fk
+      author: sri
+      changes:
+        - addForeignKeyConstraint:
+            baseTableName: webhook_subscriptions
+            baseColumnNames: tenant_id
+            referencedTableName: tenants
+            referencedColumnNames: id
+            constraintName: fk_webhook_subscriptions_tenant
+  - changeSet:
+      id: 008c-webhook-subscriptions-tenant-id-unique
+      author: sri
+      comment: Required so webhook_dead_letters can composite-FK reference (tenant_id, id) on this table.
+      changes:
+        - addUniqueConstraint:
+            tableName: webhook_subscriptions
+            columnNames: tenant_id, id
+            constraintName: uq_webhook_subscriptions_tenant_id
+
+  - changeSet:
+      id: 008d-create-webhook-dead-letters-table
+      author: sri
+      changes:
+        - createTable:
+            tableName: webhook_dead_letters
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: tenant_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+              - column:
+                  name: subscription_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+              - column:
+                  name: event_type
+                  type: VARCHAR(100)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: payload
+                  type: JSONB
+                  constraints:
+                    nullable: false
+              - column:
+                  name: last_error
+                  type: TEXT
+              - column:
+                  name: attempts
+                  type: INTEGER
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: TIMESTAMP
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+  - changeSet:
+      id: 008e-webhook-dead-letters-tenant-fk
+      author: sri
+      changes:
+        - addForeignKeyConstraint:
+            baseTableName: webhook_dead_letters
+            baseColumnNames: tenant_id
+            referencedTableName: tenants
+            referencedColumnNames: id
+            constraintName: fk_webhook_dead_letters_tenant
+  - changeSet:
+      id: 008f-webhook-dead-letters-subscription-composite-fk
+      author: sri
+      changes:
+        - addForeignKeyConstraint:
+            baseTableName: webhook_dead_letters
+            baseColumnNames: tenant_id, subscription_id
+            referencedTableName: webhook_subscriptions
+            referencedColumnNames: tenant_id, id
+            constraintName: fk_webhook_dead_letters_tenant_subscription
